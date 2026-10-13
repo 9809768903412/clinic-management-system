@@ -37,6 +37,24 @@ function createPatientRouter(patients = Patient, auth = requireAuth()) {
       if (!patient) return res.status(404).json({ message: 'Patient not found.' }); return res.json({ patient });
     } catch (error) { return next(error); }
   });
+  router.delete('/:id', roles('admin', 'receptionist'), async (req, res, next) => {
+    if (!mongoose.isObjectIdOrHexString(req.params.id)) return res.status(400).json({ message: 'Invalid patient ID.' });
+    let session;
+    try {
+      session = await mongoose.startSession();
+      await session.withTransaction(async () => {
+        const patient = await patients.findOneAndDelete({ _id: req.params.id }, { session });
+        if (!patient) { const error = new Error('Patient not found.'); error.status = 404; throw error; }
+        const visit = await Appointment.exists({ patient: patient._id }).session(session);
+        const note = await Consultation.exists({ patient: patient._id }).session(session);
+        if (visit || note) { const error = new Error('This patient has visit history and cannot be deleted. Use Archive instead.'); error.status = 409; throw error; }
+      });
+      return res.sendStatus(204);
+    } catch (error) {
+      if ([404, 409].includes(error.status)) return res.status(error.status).json({ message: error.message });
+      return next(error);
+    } finally { if (session) await session.endSession(); }
+  });
   router.get('/:id/history', roles('doctor'), async (req, res, next) => {
     if (!mongoose.isObjectIdOrHexString(req.params.id)) return res.status(400).json({ message: 'Invalid patient ID.' });
     try {
