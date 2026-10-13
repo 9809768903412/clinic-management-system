@@ -7,6 +7,14 @@ const createSessionRouter = require('./routes/session');
 const { createLoginRouter } = require('./routes/login');
 
 const app = express();
+if (process.env.VERCEL) app.set('trust proxy', 1);
+
+function allowedOrigin(req, origin) {
+  if (origin === (process.env.CLIENT_ORIGIN || 'http://localhost:5173')) return true;
+  if (!process.env.VERCEL) return false;
+  const host = req.get('host');
+  return Boolean(host && origin === `https://${host}`);
+}
 app.use(cors({ origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173', credentials: true }));
 app.use(express.json({ limit: '100kb' }));
 
@@ -21,7 +29,7 @@ app.get('/api/health', (_req, res) => {
 
 app.use('/api', (req, res, next) => {
   const origin = req.get('Origin');
-  if (req.method !== 'GET' && origin && origin !== (process.env.CLIENT_ORIGIN || 'http://localhost:5173')) return res.status(403).json({ message: 'Request origin is not allowed.' });
+  if (req.method !== 'GET' && origin && !allowedOrigin(req, origin)) return res.status(403).json({ message: 'Request origin is not allowed.' });
   next();
 });
 app.use('/api/auth', createRegisterRouter());

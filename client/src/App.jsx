@@ -10,7 +10,7 @@ import Students from './pages/Students'
 import Register from './pages/Register'
 import Login from './pages/Login'
 
-const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001/api'
+const apiUrl = import.meta.env.VITE_API_URL || '/api'
 
 function AccountApp() {
   const [user, setUser] = useState(null)

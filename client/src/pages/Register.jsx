@@ -2,7 +2,7 @@ import { useState } from 'react'
 import axios from 'axios'
 
 const emptyForm = { name: '', email: '', password: '', confirmPassword: '' }
-const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001/api'
+const apiUrl = import.meta.env.VITE_API_URL || '/api'
 
 export default function Register() {
   const [form, setForm] = useState(emptyForm)

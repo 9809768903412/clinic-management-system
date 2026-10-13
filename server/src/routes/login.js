@@ -4,7 +4,7 @@ const { rateLimit } = require('express-rate-limit');
 const User = require('../models/User');
 const { verifyPassword } = require('../utils/password');
 
-const cookieOptions = { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' };
+const cookieOptions = { httpOnly: true, secure: Boolean(process.env.VERCEL) || process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' };
 
 function createLoginRouter(users = User) {
   const router = express.Router();

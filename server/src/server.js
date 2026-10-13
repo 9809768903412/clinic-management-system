@@ -6,7 +6,7 @@ const User = require('./models/User');
 
 async function start() {
   if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) throw new Error('Set a random JWT_SECRET with at least 32 characters.');
-  await connectDatabase(process.env.MONGO_URI);
+  await connectDatabase(process.env.MONGO_URI || process.env.MONGODB_URI);
   await User.init();
   console.log('Connected to MongoDB.');
   const port = Number(process.env.PORT || 5001);
