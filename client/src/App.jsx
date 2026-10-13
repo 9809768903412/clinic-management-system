@@ -1,8 +1,12 @@
 import { useEffect, useState } from 'react'
 import axios from 'axios'
-import { BrowserRouter, Routes, Route, Navigate, Link, useNavigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import 'bootstrap/dist/css/bootstrap.min.css'
 import './App.css'
+import Profile from './pages/Profile'
+import Navigation from './components/Navigation'
+import Dashboard from './pages/Dashboard'
+import Students from './pages/Students'
 import Register from './pages/Register'
 import Login from './pages/Login'
 
@@ -45,14 +49,14 @@ function AccountApp() {
   if (error) return <main className="container py-5"><p role="alert">{error}</p><button className="btn btn-primary" onClick={() => { setChecking(true); setAttempt(value => value + 1) }}>Retry</button></main>
 
   return <>
-    <nav className="container pt-4 d-flex gap-3" aria-label="Account navigation">
-      {user ? <><Link to="/dashboard">Dashboard</Link><button className="btn btn-outline-secondary btn-sm" disabled={loggingOut} onClick={logout}>{loggingOut ? 'Logging out…' : 'Logout'}</button></> : <><Link to="/login">Login</Link><Link to="/register">Register</Link></>}
-    </nav>
+    <Navigation user={user} onLogout={logout} loggingOut={loggingOut} />
     {logoutError && <p className="container mt-3 text-danger" role="alert">{logoutError}</p>}
     <Routes>
       <Route path="/register" element={user ? <Navigate to="/dashboard" replace /> : <Register />} />
       <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <Login onLogin={loggedIn} />} />
-      <Route path="/dashboard" element={user ? <main className="container py-5"><h1 className="h3">Welcome, {user.name}</h1><p>{user.email}</p></main> : <Navigate to="/login" replace />} />
+      <Route path="/profile" element={user ? <Profile user={user} onUpdate={setUser} /> : <Navigate to="/login" replace />} />
+      <Route path="/students" element={user ? <Students /> : <Navigate to="/login" replace />} />
+      <Route path="/dashboard" element={user ? <Dashboard user={user} /> : <Navigate to="/login" replace />} />
       <Route path="*" element={<Navigate to={user ? '/dashboard' : '/login'} replace />} />
     </Routes>
   </>
