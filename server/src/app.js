@@ -1,9 +1,12 @@
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
+const createRegisterRouter = require('./routes/register');
+const createSessionRouter = require('./routes/session');
+const { createLoginRouter } = require('./routes/login');
 
 const app = express();
-app.use(cors({ origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173' }));
+app.use(cors({ origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173', credentials: true }));
 app.use(express.json({ limit: '100kb' }));
 
 // This endpoint reports readiness without exposing database credentials.
@@ -14,6 +17,15 @@ app.get('/api/health', (_req, res) => {
     database: connected ? 'connected' : 'disconnected',
   });
 });
+
+app.use('/api/auth', (req, res, next) => {
+  const origin = req.get('Origin');
+  if (req.method !== 'GET' && origin && origin !== (process.env.CLIENT_ORIGIN || 'http://localhost:5173')) return res.status(403).json({ message: 'Request origin is not allowed.' });
+  next();
+});
+app.use('/api/auth', createRegisterRouter());
+app.use('/api/auth', createLoginRouter());
+app.use('/api/auth', createSessionRouter());
 
 app.use((_req, res) => res.status(404).json({ message: 'Route not found.' }));
 app.use((error, _req, res, _next) => {

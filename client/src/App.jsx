@@ -1,45 +1,60 @@
 import { useEffect, useState } from 'react'
 import axios from 'axios'
+import { BrowserRouter, Routes, Route, Navigate, Link, useNavigate } from 'react-router-dom'
 import 'bootstrap/dist/css/bootstrap.min.css'
 import './App.css'
+import Register from './pages/Register'
+import Login from './pages/Login'
 
 const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001/api'
 
-export default function App() {
-  const [health, setHealth] = useState({ state: 'loading', message: 'Checking backend connection…' })
+function AccountApp() {
+  const [user, setUser] = useState(null)
+  const [checking, setChecking] = useState(true)
+  const [error, setError] = useState('')
+  const [attempt, setAttempt] = useState(0)
+  const [loggingOut, setLoggingOut] = useState(false)
+  const [logoutError, setLogoutError] = useState('')
+  const navigate = useNavigate()
 
   useEffect(() => {
     const controller = new AbortController()
-    axios.get(`${apiUrl}/health`, { signal: controller.signal, timeout: 6000 })
-      .then(({ data }) => setHealth({ state: 'ready', message: `Backend ready · MongoDB ${data.database}` }))
-      .catch((error) => {
-        if (axios.isCancel(error)) return
-        setHealth({ state: 'error', message: 'Backend unavailable. Start MongoDB and the server, then refresh.' })
-      })
+    axios.get(`${apiUrl}/auth/me`, { withCredentials: true, timeout: 10000, signal: controller.signal })
+      .then(({ data }) => { setUser(data.user); setError('') })
+      .catch(e => { if (!axios.isCancel(e)) { setUser(null); setError(e.response?.status === 401 ? '' : 'Cannot check your session. Check the backend connection and try again.') } })
+      .finally(() => { if (!controller.signal.aborted) setChecking(false) })
     return () => controller.abort()
-  }, [])
+  }, [attempt])
 
-  return (
-    <main className="container py-5">
-      <div className="project-shell mx-auto">
-        <p className="text-uppercase text-primary fw-semibold small">Advanced Web Programming</p>
-        <h1 className="display-5 fw-bold">MERN Project Foundation</h1>
-        <p className="lead text-secondary">A shared starting point for our group’s full-stack project.</p>
-        <div role="status" aria-live="polite" className={`alert alert-${health.state === 'ready' ? 'success' : health.state === 'error' ? 'warning' : 'info'}`}>
-          {health.message}
-        </div>
-        <section className="card border-0 shadow-sm mt-4">
-          <div className="card-body p-4">
-            <h2 className="h4">Foundation includes</h2>
-            <ul className="mb-0">
-              <li>React and Vite with Axios and Bootstrap</li>
-              <li>Express backend with MongoDB connection and health endpoint</li>
-              <li>Environment templates and team setup instructions</li>
-            </ul>
-          </div>
-        </section>
-        <p className="text-secondary mt-4">Authentication, routing, CRUD, and the final system interface are upcoming team tasks.</p>
-      </div>
-    </main>
-  )
+  async function logout() {
+    if (loggingOut) return
+    setLoggingOut(true)
+    setLogoutError('')
+    try {
+      await axios.post(`${apiUrl}/auth/logout`, {}, { withCredentials: true, timeout: 10000 })
+      setUser(null)
+      navigate('/login', { replace: true })
+    } catch (e) {
+      if (e.response?.status === 401) { setUser(null); navigate('/login', { replace: true }) }
+      else setLogoutError('Logout failed. Please try again.')
+    } finally { setLoggingOut(false) }
+  }
+
+  function loggedIn(account) { setUser(account); navigate('/dashboard', { replace: true }) }
+  if (checking) return <main className="container py-5" role="status">Checking your session…</main>
+  if (error) return <main className="container py-5"><p role="alert">{error}</p><button className="btn btn-primary" onClick={() => { setChecking(true); setAttempt(value => value + 1) }}>Retry</button></main>
+
+  return <>
+    <nav className="container pt-4 d-flex gap-3" aria-label="Account navigation">
+      {user ? <><Link to="/dashboard">Dashboard</Link><button className="btn btn-outline-secondary btn-sm" disabled={loggingOut} onClick={logout}>{loggingOut ? 'Logging out…' : 'Logout'}</button></> : <><Link to="/login">Login</Link><Link to="/register">Register</Link></>}
+    </nav>
+    {logoutError && <p className="container mt-3 text-danger" role="alert">{logoutError}</p>}
+    <Routes>
+      <Route path="/register" element={user ? <Navigate to="/dashboard" replace /> : <Register />} />
+      <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <Login onLogin={loggedIn} />} />
+      <Route path="/dashboard" element={user ? <main className="container py-5"><h1 className="h3">Welcome, {user.name}</h1><p>{user.email}</p></main> : <Navigate to="/login" replace />} />
+      <Route path="*" element={<Navigate to={user ? '/dashboard' : '/login'} replace />} />
+    </Routes>
+  </>
 }
+export default function App() { return <BrowserRouter><AccountApp /></BrowserRouter> }
