@@ -12,7 +12,7 @@ function validSlot(value) {
   const date = new Date(value);
   return typeof value === 'string' && !Number.isNaN(date.getTime()) && date.getUTCMinutes() % 30 === 0 && date.getUTCSeconds() === 0 && date.getUTCMilliseconds() === 0;
 }
-const details = query => query.populate('patient', 'name patientId birthDate contact archived').populate('doctor', 'name');
+const details = query => query.populate('patient', 'name patientId birthDate contact archived').populate('doctor', 'name').populate('edits.by', 'name').populate('edits.previousDoctor', 'name').populate('edits.doctor', 'name');
 function createAppointmentRouter() {
   const router = express.Router(); router.use(requireAuth(), roles('admin', 'receptionist', 'doctor'));
   router.get('/', async (req, res, next) => {
@@ -49,6 +49,24 @@ function createAppointmentRouter() {
       if (error.status === 409) return res.status(409).json({ message: error.message });
       return next(error);
     } finally { if (session) await session.endSession(); }
+  });
+  router.put('/:id', roles('admin', 'receptionist'), async (req, res, next) => {
+    const { doctor, scheduledAt, reason, expectedUpdatedAt } = req.body || {};
+    if (!mongoose.isObjectIdOrHexString(req.params.id) || !mongoose.isObjectIdOrHexString(doctor) || typeof reason !== 'string' || reason.length > 200 || !validSlot(scheduledAt) || typeof expectedUpdatedAt !== 'string' || Number.isNaN(Date.parse(expectedUpdatedAt))) return res.status(400).json({ message: 'Choose a doctor, a 30-minute slot, and a reason under 200 characters. Refresh if the visit is stale.' });
+    try {
+      const current = await Appointment.findById(req.params.id);
+      if (!current) return res.status(404).json({ message: 'Appointment not found.' });
+      if (!['Scheduled', 'Checked in'].includes(current.status)) return res.status(409).json({ message: 'Completed, cancelled, and no-show visits cannot be edited.' });
+      if (new Date(expectedUpdatedAt).getTime() !== current.updatedAt.getTime()) return res.status(409).json({ message: 'Another staff member updated this visit. Refresh before editing.' });
+      if (current.status === 'Scheduled' && new Date(scheduledAt) <= new Date()) return res.status(400).json({ message: 'Choose a future appointment time.' });
+      if (current.status === 'Checked in' && (new Date(scheduledAt).getTime() !== current.scheduledAt.getTime() || reason.trim() !== current.reason)) return res.status(400).json({ message: 'Checked-in visits can only be reassigned to another doctor.' });
+      if (!await User.exists({ _id: doctor, role: 'doctor', active: true })) return res.status(400).json({ message: 'Choose an active doctor.' });
+      const update = { doctor, scheduledAt: new Date(scheduledAt), reason: reason.trim() };
+      if (String(current.doctor) === doctor && current.scheduledAt.getTime() === update.scheduledAt.getTime() && current.reason === update.reason) return res.json({ appointment: await details(Appointment.findById(current._id)) });
+      const appointment = await details(Appointment.findOneAndUpdate({ _id: current._id, status: current.status, updatedAt: current.updatedAt }, { $set: update, $push: { edits: { at: new Date(), by: req.user._id, previousDoctor: current.doctor, doctor, previousScheduledAt: current.scheduledAt, scheduledAt: update.scheduledAt, previousReason: current.reason, reason: update.reason } } }, { returnDocument: 'after', runValidators: true }));
+      if (!appointment) return res.status(409).json({ message: 'This visit changed while you were editing. Refresh and try again.' });
+      return res.json({ appointment });
+    } catch (error) { if (error.code === 11000) return res.status(409).json({ message: 'The selected doctor already has a visit in that slot.' }); return next(error); }
   });
   router.patch('/:id/status', roles('admin', 'receptionist'), async (req, res, next) => {
     const status = req.body?.status;
