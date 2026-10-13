@@ -11,4 +11,5 @@ const appointmentSchema = new mongoose.Schema({
   history: [{ status: String, at: { type: Date, default: Date.now }, by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' } }],
 }, { timestamps: true });
 appointmentSchema.index({ doctor: 1, scheduledAt: 1 }, { unique: true, partialFilterExpression: { status: { $in: ['Scheduled', 'Checked in'] } } });
+appointmentSchema.index({ patient: 1, scheduledAt: 1 }, { unique: true, partialFilterExpression: { status: { $in: ['Scheduled', 'Checked in'] } } });
 module.exports = mongoose.model('Appointment', appointmentSchema);

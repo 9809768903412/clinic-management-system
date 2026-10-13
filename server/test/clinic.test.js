@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const express = require('express');
 const roles = require('../src/middleware/roles');
 const { patientInput, pageQuery, literalSearch, today } = require('../src/utils/clinicValidation');
-const { validSlot, transitions } = require('../src/routes/appointments');
+const { validSlot, validVisitTime, transitions } = require('../src/routes/appointments');
 const createPatientRouter = require('../src/routes/patients');
 const app = require('../src/app');
 
@@ -46,4 +46,14 @@ test('public registration is closed and appointment rules use 30-minute slots', 
   await withServer(app, async base => { assert.equal((await fetch(base + '/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })).status, 403); assert.equal((await fetch(base + '/api/staff')).status, 401); });
   assert.equal(validSlot('2026-10-15T01:30:00.000Z'), true); assert.equal(validSlot('2026-10-15T01:15:00.000Z'), false);
   assert.equal(transitions.Scheduled.includes('Completed'), false); assert.equal(transitions['Checked in'].includes('Scheduled'), false);
+});
+
+ test('walk-ins use current/next slots and scheduled appointments must be future', () => {
+  const now = Date.parse('2026-10-15T01:12:00Z');
+  assert.equal(validVisitTime('2026-10-15T01:00:00Z', 'Walk-in', now), true);
+  assert.equal(validVisitTime('2026-10-15T01:30:00Z', 'Walk-in', now), true);
+  assert.equal(validVisitTime('2026-10-15T02:00:00Z', 'Walk-in', now), false);
+  assert.equal(validVisitTime('2026-10-15T00:30:00Z', 'Walk-in', now), false);
+  assert.equal(validVisitTime('2026-10-15T01:00:00Z', 'Appointment', now), false);
+  assert.equal(validVisitTime('2026-10-15T01:30:00Z', 'Appointment', now), true);
 });

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { notifySessionChange } from '../lib/session'
 import api from '../lib/api'
 
 export default function Profile({ user, onUpdate }) {
@@ -6,7 +7,7 @@ export default function Profile({ user, onUpdate }) {
   async function changePassword(event) {
     event.preventDefault(); if (busy) return
     setBusy(true); setError(''); setMessage('')
-    try { await api.post('/auth/password', passwords); window.location.assign('/login') }
+    try { await api.post('/auth/password', passwords); notifySessionChange(); window.location.assign('/login') }
     catch (e) { setError(e.response?.data?.message || 'Could not change your password.') }
     finally { setBusy(false) }
   }
