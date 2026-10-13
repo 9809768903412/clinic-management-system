@@ -6,6 +6,7 @@ function dateParts(date) {
   const get = type => parts.find(p => p.type === type).value
   return { date: `${get('year')}-${get('month')}-${get('day')}`, time: `${get('hour')}:${get('minute')}` }
 }
+export function clinicInput(value) { const parts = dateParts(new Date(value)); return `${parts.date}T${parts.time}` }
 export function nextSlot() {
   const parts = dateParts(new Date(Math.ceil(Date.now() / 1800000) * 1800000))
   return `${parts.date}T${parts.time}`
