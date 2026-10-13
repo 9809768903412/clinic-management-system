@@ -16,6 +16,7 @@ function store() {
       const chain = { sort: () => chain, skip: n => { result = result.slice(n); return chain; }, limit: n => { result = result.slice(0, n); return chain; }, then: resolve => Promise.resolve(result).then(resolve) };
       return chain;
     },
+    distinct: async (field, query) => [...new Set(rows.filter(row => matches(row, query)).map(row => row[field]))],
     countDocuments: async query => rows.filter(row => matches(row, query)).length,
     findOneAndUpdate: async (query, update) => { const row = rows.find(row => matches(row, query)); if (!row) return null; Object.assign(row, update.$set); return row; },
     findOneAndDelete: async query => { const index = rows.findIndex(row => matches(row, query)); return index < 0 ? null : rows.splice(index, 1)[0]; },
@@ -53,5 +54,14 @@ test('search is literal and account-scoped; pagination validates and clamps page
     const found = await (await request('GET', '?search=Student%2011')).json(); assert.equal(found.total, 1);
     const literal = await (await request('GET', '?search=%2E%2A')).json(); assert.equal(literal.total, 0);
     for (const query of ['?page=0', '?limit=999', '?page=abc', '?search=a&search=b']) assert.equal((await request('GET', query)).status, 400);
+  });
+});
+
+ test('dashboard summary includes only current account records', async () => {
+  await withApi(async (request, data) => {
+    await data.create({ name: 'Alice', course: 'IT', age: 20, owner: 'owner-a' });
+    await data.create({ name: 'Bob', course: 'CS', age: 21, owner: 'owner-b' });
+    const response = await request('GET', '/summary'); assert.equal(response.status, 200);
+    const result = await response.json(); assert.equal(result.total, 1); assert.equal(result.courses, 1); assert.equal(result.latest[0].name, 'Alice');
   });
 });

@@ -17,6 +17,13 @@ function validateStudent(body) {
 function createStudentRouter(students = Student, requireAuth = createRequireAuth()) {
   const router = express.Router();
   router.use(requireAuth);
+  router.get('/summary', async (req, res, next) => {
+    try {
+      const filter = { owner: req.user._id };
+      const [total, courses, latest] = await Promise.all([students.countDocuments(filter), students.distinct('course', filter), students.find(filter).sort({ createdAt: -1, _id: -1 }).limit(5)]);
+      return res.json({ total, courses: courses.length, latest });
+    } catch (error) { return next(error); }
+  });
   router.get('/', async (req, res, next) => {
     try {
       const search = req.query.search === undefined ? '' : req.query.search;
