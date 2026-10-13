@@ -1,2 +1,5 @@
 .register-card { max-width: 480px; }
 .search-input { max-width: 360px; }
+.account-name { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.table td { overflow-wrap: anywhere; }
+@media (max-width: 575px) { .search-input { max-width: none; } }

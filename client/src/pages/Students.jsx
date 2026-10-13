@@ -67,7 +67,7 @@ export default function Students() {
       <h2 className="h5">{editing ? 'Edit student' : 'Add student'}</h2>
       <form onSubmit={save} noValidate><fieldset disabled={busy}><div className="row g-3">
         {['name', 'course', 'age'].map(field => <div className={field === 'age' ? 'col-sm-2' : 'col-sm-5'} key={field}>
-          <label className="form-label text-capitalize" htmlFor={`student-${field}`}>{field}</label>
+          <label className="form-label text-capitalize" htmlFor={`student-${field}`}>{field[0].toUpperCase() + field.slice(1)}</label>
           <input id={`student-${field}`} name={field} value={form[field]} onChange={change} type={field === 'age' ? 'number' : 'text'} min={field === 'age' ? 1 : undefined} max={field === 'age' ? 120 : undefined} maxLength={80} className={`form-control ${errors[field] ? 'is-invalid' : ''}`} aria-invalid={Boolean(errors[field])} aria-describedby={errors[field] ? `${field}-error` : undefined} required />
           {errors[field] && <div className="invalid-feedback" id={`${field}-error`}>{errors[field]}</div>}
         </div>)}
