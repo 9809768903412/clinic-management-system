@@ -21,7 +21,7 @@ export default function Login({ onLogin }) {
     finally { setBusy(false) }
   }
   return <main className="container py-5"><section className="register-card card border-0 shadow-sm mx-auto"><div className="card-body p-4 p-sm-5">
-    <h1 className="h3">Login</h1>
+    <h1 className="h3">Staff login</h1><p className="text-secondary">Use the account provided by your clinic administrator.</p>
     {message && <div role="alert" className="alert alert-danger">{message}</div>}
     <form onSubmit={submit}><fieldset disabled={busy}>
       <label htmlFor="login-email" className="form-label">Email</label>

@@ -6,7 +6,7 @@ function createRegisterRouter(users = User) {
   const router = express.Router();
 
   router.post('/register', async (req, res, next) => {
-    const { name, email, password, confirmPassword } = req.body || {};
+    const { name, email, password, confirmPassword, role } = req.body || {};
     const errors = {};
     const cleanName = typeof name === 'string' ? name.trim() : '';
     const cleanEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
@@ -17,11 +17,12 @@ function createRegisterRouter(users = User) {
       errors.password = 'Use a password between 8 and 128 characters.';
     }
     if (typeof confirmPassword !== 'string' || password !== confirmPassword) errors.confirmPassword = 'Passwords do not match.';
+    if (role !== undefined && !['receptionist', 'doctor'].includes(role)) errors.role = 'Choose doctor or receptionist.';
     if (Object.keys(errors).length) return res.status(400).json({ message: 'Check the highlighted fields.', errors });
 
     try {
       const passwordHash = await hashPassword(password);
-      const user = await users.create({ name: cleanName, email: cleanEmail, passwordHash });
+      const user = await users.create({ name: cleanName, email: cleanEmail, passwordHash, role: role || 'receptionist', active: true });
       return res.status(201).json({
         message: 'Account created successfully.',
         user: { id: user._id, name: user.name, email: user.email },
