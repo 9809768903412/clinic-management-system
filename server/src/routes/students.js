@@ -19,8 +19,25 @@ function createStudentRouter(students = Student, requireAuth = createRequireAuth
   router.use(requireAuth);
   router.get('/', async (req, res, next) => {
     try {
-      const items = await students.find({ owner: req.user._id }).sort({ createdAt: -1, _id: -1 });
-      return res.json({ items });
+      const search = req.query.search === undefined ? '' : req.query.search;
+      const pageText = req.query.page === undefined ? '1' : req.query.page;
+      const limitText = req.query.limit === undefined ? '10' : req.query.limit;
+      if (typeof search !== 'string' || search.length > 80 || typeof pageText !== 'string' || !/^[1-9]\d*$/.test(pageText) || typeof limitText !== 'string' || !/^[1-9]\d*$/.test(limitText)) return res.status(400).json({ message: 'Invalid search or pagination parameters.' });
+      const requestedPage = Number(pageText);
+      const limit = Number(limitText);
+      if (!Number.isSafeInteger(requestedPage) || limit > 50) return res.status(400).json({ message: 'Invalid page or page size.' });
+      const filter = { owner: req.user._id };
+      const cleanSearch = search.trim();
+      if (cleanSearch) {
+        const literal = cleanSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const expression = new RegExp(literal, 'i');
+        filter.$or = [{ name: expression }, { course: expression }];
+      }
+      const total = await students.countDocuments(filter);
+      const pages = Math.max(1, Math.ceil(total / limit));
+      const page = Math.min(requestedPage, pages);
+      const items = await students.find(filter).sort({ createdAt: -1, _id: -1 }).skip((page - 1) * limit).limit(limit);
+      return res.json({ items, total, page, pages, limit });
     } catch (error) { return next(error); }
   });
   router.post('/', async (req, res, next) => {

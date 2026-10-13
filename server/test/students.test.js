@@ -44,4 +44,14 @@ test('student CRUD validates input, persists changes through the adapter, and is
     assert.equal((await request('DELETE', `/${student._id}`)).status, 404);
   });
 });
-module.exports = { withApi };
+test('search is literal and account-scoped; pagination validates and clamps pages', async () => {
+  await withApi(async (request, data) => {
+    for (let n = 0; n < 12; n++) await data.create({ name: `Student ${n}`, course: 'IT', age: 20, owner: 'owner-a' });
+    await data.create({ name: 'Other student', course: 'IT', age: 20, owner: 'owner-b' });
+    const first = await (await request('GET', '?page=1&limit=10')).json(); assert.equal(first.items.length, 10); assert.equal(first.total, 12); assert.equal(first.pages, 2);
+    const last = await (await request('GET', '?page=99&limit=10')).json(); assert.equal(last.page, 2); assert.equal(last.items.length, 2);
+    const found = await (await request('GET', '?search=Student%2011')).json(); assert.equal(found.total, 1);
+    const literal = await (await request('GET', '?search=%2E%2A')).json(); assert.equal(literal.total, 0);
+    for (const query of ['?page=0', '?limit=999', '?page=abc', '?search=a&search=b']) assert.equal((await request('GET', query)).status, 400);
+  });
+});

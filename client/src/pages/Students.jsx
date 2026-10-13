@@ -4,6 +4,10 @@ import api from '../lib/api'
 const blank = { name: '', course: '', age: '' }
 export default function Students() {
   const [items, setItems] = useState([])
+  const [searchInput, setSearchInput] = useState('')
+  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 })
   const [form, setForm] = useState(blank)
   const [editing, setEditing] = useState(null)
   const [errors, setErrors] = useState({})
@@ -15,12 +19,12 @@ export default function Students() {
 
   useEffect(() => {
     const controller = new AbortController()
-    api.get('/students', { signal: controller.signal })
-      .then(({ data }) => setItems(data.items))
+    api.get('/students', { signal: controller.signal, params: { search, page, limit: 10 } })
+      .then(({ data }) => { setItems(data.items); setPagination({ page: data.page, pages: data.pages, total: data.total }) })
       .catch(e => { if (e.code !== 'ERR_CANCELED') setError('Cannot load students. Please try again.') })
       .finally(() => { if (!controller.signal.aborted) setLoading(false) })
     return () => controller.abort()
-  }, [refresh])
+  }, [refresh, search, page])
 
   function reload() { setLoading(true); setError(''); setRefresh(value => value + 1) }
   function clearForm() { setForm(blank); setEditing(null); setErrors({}) }
@@ -69,9 +73,20 @@ export default function Students() {
         </div>)}
       </div><div className="d-flex gap-2 mt-3"><button className="btn btn-primary">{busy ? 'Saving…' : editing ? 'Save changes' : 'Add student'}</button>{editing && <button type="button" className="btn btn-outline-secondary" onClick={clearForm}>Cancel</button>}</div></fieldset></form>
     </div></section>
+    <form className="d-flex flex-wrap gap-2 mb-3" onSubmit={e => { e.preventDefault(); setSearch(searchInput.trim()); setPage(1); reload() }} role="search">
+      <label htmlFor="student-search" className="visually-hidden">Search by name or course</label>
+      <input id="student-search" className="form-control search-input" value={searchInput} maxLength={80} onChange={e => setSearchInput(e.target.value)} placeholder="Search by name or course" />
+      <button className="btn btn-outline-primary" type="submit">Search</button>
+      <button className="btn btn-outline-secondary" type="button" onClick={() => { setSearchInput(''); setSearch(''); setPage(1); reload() }}>Clear</button>
+    </form>
+    {search && <p className="text-secondary">Results for “{search}”</p>}
     {loading ? <p role="status">Loading students…</p> : <div className="table-responsive"><table className="table table-hover align-middle"><thead><tr><th scope="col">Name</th><th scope="col">Course</th><th scope="col">Age</th><th scope="col">Actions</th></tr></thead><tbody>
       {items.map(student => <tr key={student._id}><td>{student.name}</td><td>{student.course}</td><td>{student.age}</td><td><div className="d-flex gap-2"><button className="btn btn-sm btn-outline-primary" disabled={busy} onClick={() => { setEditing(student._id); setForm({ name: student.name, course: student.course, age: String(student.age) }); setErrors({}); setMessage(''); window.scrollTo({ top: 0, behavior: 'smooth' }) }} aria-label={`Edit ${student.name}`}>Edit</button><button className="btn btn-sm btn-outline-danger" disabled={busy} onClick={() => remove(student)} aria-label={`Delete ${student.name}`}>Delete</button></div></td></tr>)}
-      {!items.length && <tr><td colSpan="4" className="text-secondary text-center py-4">No students yet. Add your first record above.</td></tr>}
+      {!items.length && <tr><td colSpan="4" className="text-secondary text-center py-4">{search ? 'No matching students.' : 'No students yet. Add your first record above.'}</td></tr>}
     </tbody></table></div>}
+    {!loading && !error && <nav className="d-flex flex-wrap justify-content-between align-items-center gap-3" aria-label="Student list pages">
+      <span className="text-secondary">{pagination.total} records · Page {pagination.page} of {pagination.pages}</span>
+      <div className="d-flex gap-2"><button className="btn btn-outline-secondary" disabled={pagination.page <= 1 || busy} onClick={() => { setPage(pagination.page - 1); reload() }}>Previous</button><button className="btn btn-outline-secondary" disabled={pagination.page >= pagination.pages || busy} onClick={() => { setPage(pagination.page + 1); reload() }}>Next</button></div>
+    </nav>}
   </main>
 }
