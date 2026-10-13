@@ -5,7 +5,7 @@ export default function Navigation({ user, onLogout, loggingOut }) {
   const [open, setOpen] = useState(false)
   const close = () => setOpen(false)
   const itemClass = ({ isActive }) => `nav-link${isActive ? ' active fw-semibold' : ''}`
-  return <nav className="navbar navbar-expand-md bg-white border-bottom" aria-label="Main navigation"><div className="container">
+  return <nav className="navbar navbar-expand-xl bg-white border-bottom" aria-label="Main navigation"><div className="container">
     <Link className="navbar-brand fw-bold" to={user ? '/dashboard' : '/login'} onClick={close}>Clinic Management</Link>
     <button className="navbar-toggler" type="button" aria-controls="main-menu" aria-expanded={open} aria-label="Toggle navigation" onClick={() => setOpen(value => !value)}><span className="navbar-toggler-icon" /></button>
     <div id="main-menu" className={`collapse navbar-collapse${open ? ' show' : ''}`}>
