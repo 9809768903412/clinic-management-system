@@ -30,13 +30,25 @@ function createAppointmentRouter() {
     const { patient, doctor, scheduledAt, visitType, reason = '' } = req.body || {};
     if (!mongoose.isObjectIdOrHexString(patient) || !mongoose.isObjectIdOrHexString(doctor) || !['Appointment', 'Walk-in'].includes(visitType) || typeof reason !== 'string' || reason.length > 200) return res.status(400).json({ message: 'Choose a patient, doctor, visit type, and reason under 200 characters.' });
     if (!validSlot(scheduledAt) || new Date(scheduledAt) < new Date(Date.now() - (visitType === 'Walk-in' ? 30 * 60 * 1000 : 0))) return res.status(400).json({ message: 'Choose a future 30-minute slot (00 or 30 minutes). Walk-ins may use the current slot.' });
+    let session;
     try {
       if (!await Patient.exists({ _id: patient, archived: false })) return res.status(400).json({ message: 'Choose an active patient.' });
       if (!await User.exists({ _id: doctor, role: 'doctor', active: true })) return res.status(400).json({ message: 'Choose an active doctor.' });
       const status = visitType === 'Walk-in' ? 'Checked in' : 'Scheduled';
-      const appointment = await Appointment.create({ patient, doctor, scheduledAt, visitType, reason: reason.trim(), status, createdBy: req.user._id, history: [{ status, by: req.user._id }] });
+      session = await mongoose.startSession();
+      let appointment;
+      await session.withTransaction(async () => {
+        // Touch the patient to serialize booking against patient deletion.
+        const record = await Patient.findOneAndUpdate({ _id: patient, archived: false }, { $inc: { __v: 1 } }, { session, returnDocument: 'after' });
+        if (!record) { const error = new Error('Choose an active patient.'); error.status = 409; throw error; }
+        [appointment] = await Appointment.create([{ patient, doctor, scheduledAt, visitType, reason: reason.trim(), status, createdBy: req.user._id, history: [{ status, by: req.user._id }] }], { session });
+      });
       return res.status(201).json({ appointment: await details(Appointment.findById(appointment._id)) });
-    } catch (error) { if (error.code === 11000) return res.status(409).json({ message: 'This doctor already has a visit in that slot. Choose another slot or doctor.' }); return next(error); }
+    } catch (error) {
+      if (error.code === 11000) return res.status(409).json({ message: 'This doctor already has a visit in that slot. Choose another slot or doctor.' });
+      if (error.status === 409) return res.status(409).json({ message: error.message });
+      return next(error);
+    } finally { if (session) await session.endSession(); }
   });
   router.patch('/:id/status', roles('admin', 'receptionist'), async (req, res, next) => {
     const status = req.body?.status;

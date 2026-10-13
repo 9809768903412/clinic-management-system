@@ -37,6 +37,8 @@ test('patients are shared with staff, while doctors cannot write demographic rec
     assert.equal((await fetch(base, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Role': 'doctor' }, body })).status, 403);
     assert.equal((await fetch(base, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Role': 'receptionist' }, body })).status, 201);
     assert.equal(saved.createdBy, 'staff-id');
+    assert.equal((await fetch(base + '/0123456789abcdef01234567', { method: 'DELETE', headers: { 'X-Role': 'doctor' } })).status, 403);
+    assert.equal((await fetch(base + '/bad-id', { method: 'DELETE', headers: { 'X-Role': 'receptionist' } })).status, 400);
   });
 });
 test('public registration is closed and appointment rules use 30-minute slots', async () => {
