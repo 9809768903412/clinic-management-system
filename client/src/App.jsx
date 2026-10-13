@@ -6,8 +6,10 @@ import './App.css'
 import Profile from './pages/Profile'
 import Navigation from './components/Navigation'
 import Dashboard from './pages/Dashboard'
-import Students from './pages/Students'
-import Register from './pages/Register'
+import Patients from './pages/Patients'
+import Appointments from './pages/Appointments'
+import Consultations from './pages/Consultations'
+import Staff from './pages/Staff'
 import Login from './pages/Login'
 
 const apiUrl = import.meta.env.VITE_API_URL || '/api'
@@ -52,10 +54,12 @@ function AccountApp() {
     <Navigation user={user} onLogout={logout} loggingOut={loggingOut} />
     {logoutError && <p className="container mt-3 text-danger" role="alert">{logoutError}</p>}
     <Routes>
-      <Route path="/register" element={user ? <Navigate to="/dashboard" replace /> : <Register />} />
+      <Route path="/staff" element={user?.role === 'admin' ? <Staff /> : <Navigate to={user ? '/dashboard' : '/login'} replace />} />
       <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <Login onLogin={loggedIn} />} />
       <Route path="/profile" element={user ? <Profile user={user} onUpdate={setUser} /> : <Navigate to="/login" replace />} />
-      <Route path="/students" element={user ? <Students /> : <Navigate to="/login" replace />} />
+      <Route path="/patients" element={user ? <Patients user={user} /> : <Navigate to="/login" replace />} />
+      <Route path="/appointments" element={user ? <Appointments user={user} /> : <Navigate to="/login" replace />} />
+      <Route path="/consultations" element={user?.role === 'doctor' ? <Consultations /> : <Navigate to={user ? '/dashboard' : '/login'} replace />} />
       <Route path="/dashboard" element={user ? <Dashboard user={user} /> : <Navigate to="/login" replace />} />
       <Route path="*" element={<Navigate to={user ? '/dashboard' : '/login'} replace />} />
     </Routes>

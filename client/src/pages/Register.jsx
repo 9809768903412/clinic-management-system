@@ -1,10 +1,9 @@
 import { useState } from 'react'
-import axios from 'axios'
+import api from '../lib/api'
 
-const emptyForm = { name: '', email: '', password: '', confirmPassword: '' }
-const apiUrl = import.meta.env.VITE_API_URL || '/api'
+const emptyForm = { name: '', email: '', password: '', confirmPassword: '', role: 'receptionist' }
 
-export default function Register() {
+export default function Register({ onCreated }) {
   const [form, setForm] = useState(emptyForm)
   const [errors, setErrors] = useState({})
   const [message, setMessage] = useState('')
@@ -34,10 +33,11 @@ export default function Register() {
 
     setSubmitting(true)
     try {
-      const { data } = await axios.post(`${apiUrl}/auth/register`, form, { timeout: 10000 })
+      const { data } = await api.post('/staff/register', form)
       setSuccess(true)
       setMessage(data.message)
       setForm(emptyForm)
+      onCreated?.()
     } catch (error) {
       setErrors(error.response?.data?.errors || {})
       setMessage(error.response?.data?.message || 'Cannot reach the server. Please try again.')
@@ -54,11 +54,11 @@ export default function Register() {
   ]
 
   return (
-    <main className="container py-5">
+    <section className="py-4">
       <section className="register-card card border-0 shadow-sm mx-auto">
         <div className="card-body p-4 p-sm-5">
-          <h1 className="h3 mb-2">Create an account</h1>
-          <p className="text-secondary mb-4">Enter your details to register.</p>
+          <h1 className="h3 mb-2">Add staff account</h1>
+          <p className="text-secondary mb-4">Create a login for a doctor or receptionist. Share the initial password privately.</p>
           {message && <div role="status" className={`alert alert-${success ? 'success' : 'danger'}`}>{message}</div>}
           <form onSubmit={submit} noValidate>
             <fieldset disabled={submitting}>
@@ -71,12 +71,13 @@ export default function Register() {
                   {errors[name] && <div id={`${name}-error`} className="invalid-feedback">{errors[name]}</div>}
                 </div>
               ))}
+              <div className="mb-3"><label htmlFor="staff-role" className="form-label">Role</label><select id="staff-role" className="form-select" name="role" value={form.role} onChange={changeField}><option value="receptionist">Receptionist</option><option value="doctor">Doctor</option></select></div>
               <p className="small text-secondary">Use 8–128 characters for your password.</p>
-              <button className="btn btn-primary w-100" type="submit">{submitting ? 'Creating account…' : 'Register'}</button>
+              <button className="btn btn-primary w-100" type="submit">{submitting ? 'Creating account…' : 'Create staff account'}</button>
             </fieldset>
           </form>
         </div>
       </section>
-    </main>
+    </section>
   )
 }

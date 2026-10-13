@@ -3,3 +3,6 @@
 .account-name { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .table td { overflow-wrap: anywhere; }
 @media (max-width: 575px) { .search-input { max-width: none; } }
+.status-filter { max-width: 200px; }
+.clinical-note { white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 575px) { .status-filter { max-width: none; } .navbar-brand { font-size: 1.05rem; } }

@@ -5,7 +5,7 @@ const User = require('./models/User');
 function createVercelHandler(ensureReady = async () => {
   if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) throw new Error('JWT_SECRET is not configured.');
   await connectDatabase(process.env.MONGO_URI || process.env.MONGODB_URI);
-  await User.init();
+  await Promise.all([User.init(), require('./models/Patient').init(), require('./models/Appointment').init(), require('./models/Consultation').init()]);
 }, application = app) {
   return async (req, res) => {
     try {

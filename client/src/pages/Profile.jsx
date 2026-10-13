@@ -2,6 +2,14 @@ import { useState } from 'react'
 import api from '../lib/api'
 
 export default function Profile({ user, onUpdate }) {
+  const [passwords, setPasswords] = useState({ currentPassword: '', password: '', confirmPassword: '' })
+  async function changePassword(event) {
+    event.preventDefault(); if (busy) return
+    setBusy(true); setError(''); setMessage('')
+    try { await api.post('/auth/password', passwords); window.location.assign('/login') }
+    catch (e) { setError(e.response?.data?.message || 'Could not change your password.') }
+    finally { setBusy(false) }
+  }
   const [name, setName] = useState(user.name)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -30,5 +38,6 @@ export default function Profile({ user, onUpdate }) {
       <p id="email-note" className="small text-secondary mb-4">Your email is used to log in and cannot be changed here.</p>
       <button className="btn btn-primary" type="submit">{busy ? 'Saving…' : 'Save profile'}</button>
     </fieldset></form>
+    <form className="border-top mt-4 pt-4" onSubmit={changePassword}><fieldset disabled={busy}><h2 className="h5">Change password</h2><p className="small text-secondary">Use 8–128 characters. You will be logged out after changing it.</p>{[['currentPassword', 'Current password'], ['password', 'New password'], ['confirmPassword', 'Confirm new password']].map(([field, label]) => <div className="mb-3" key={field}><label className="form-label" htmlFor={`profile-${field}`}>{label}</label><input id={`profile-${field}`} className="form-control" type="password" required minLength={field === 'currentPassword' ? undefined : 8} maxLength={128} autoComplete={field === 'currentPassword' ? 'current-password' : 'new-password'} value={passwords[field]} onChange={e => setPasswords(v => ({ ...v, [field]: e.target.value }))} /></div>)}<button className="btn btn-outline-primary">Change password</button></fieldset></form>
   </div></section></main>
 }

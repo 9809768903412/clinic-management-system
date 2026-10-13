@@ -1,8 +1,10 @@
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
-const createStudentRouter = require('./routes/students');
-const createRegisterRouter = require('./routes/register');
+const createPatientRouter = require('./routes/patients');
+const { createAppointmentRouter } = require('./routes/appointments');
+const createClinicRouter = require('./routes/clinic');
+const createStaffRouter = require('./routes/staff');
 const createSessionRouter = require('./routes/session');
 const { createLoginRouter } = require('./routes/login');
 
@@ -32,10 +34,13 @@ app.use('/api', (req, res, next) => {
   if (req.method !== 'GET' && origin && !allowedOrigin(req, origin)) return res.status(403).json({ message: 'Request origin is not allowed.' });
   next();
 });
-app.use('/api/auth', createRegisterRouter());
+app.post('/api/auth/register', (_req, res) => res.status(403).json({ message: 'Staff accounts are created by the clinic administrator.' }));
 app.use('/api/auth', createLoginRouter());
 app.use('/api/auth', createSessionRouter());
-app.use('/api/students', createStudentRouter());
+app.use('/api/patients', createPatientRouter());
+app.use('/api/appointments', createAppointmentRouter());
+app.use('/api/clinic', createClinicRouter());
+app.use('/api/staff', createStaffRouter());
 
 app.use((_req, res) => res.status(404).json({ message: 'Route not found.' }));
 app.use((error, _req, res, _next) => {
