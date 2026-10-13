@@ -1,17 +1,43 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import axios from 'axios'
+import { BrowserRouter, Routes, Route, Navigate, Link, useNavigate } from 'react-router-dom'
 import 'bootstrap/dist/css/bootstrap.min.css'
 import './App.css'
 import Register from './pages/Register'
 import Login from './pages/Login'
 
-export default function App() {
-  const [page, setPage] = useState('login')
+const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001/api'
+
+function AccountApp() {
   const [user, setUser] = useState(null)
+  const [checking, setChecking] = useState(true)
+  const [error, setError] = useState('')
+  const [attempt, setAttempt] = useState(0)
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    const controller = new AbortController()
+    axios.get(`${apiUrl}/auth/me`, { withCredentials: true, timeout: 10000, signal: controller.signal })
+      .then(({ data }) => { setUser(data.user); setError('') })
+      .catch(e => { if (!axios.isCancel(e)) { setUser(null); setError(e.response?.status === 401 ? '' : 'Cannot check your session. Check the backend connection and try again.') } })
+      .finally(() => { if (!controller.signal.aborted) setChecking(false) })
+    return () => controller.abort()
+  }, [attempt])
+
+  function loggedIn(account) { setUser(account); navigate('/dashboard', { replace: true }) }
+  if (checking) return <main className="container py-5" role="status">Checking your session…</main>
+  if (error) return <main className="container py-5"><p role="alert">{error}</p><button className="btn btn-primary" onClick={() => { setChecking(true); setAttempt(value => value + 1) }}>Retry</button></main>
+
   return <>
-    <nav className="container pt-4 d-flex gap-2" aria-label="Account navigation">
-      <button className="btn btn-outline-primary" onClick={() => setPage('login')}>Login</button>
-      <button className="btn btn-outline-primary" onClick={() => setPage('register')}>Register</button>
+    <nav className="container pt-4 d-flex gap-3" aria-label="Account navigation">
+      {user ? <Link to="/dashboard">Dashboard</Link> : <><Link to="/login">Login</Link><Link to="/register">Register</Link></>}
     </nav>
-    {user ? <main className="container py-5"><h1 className="h3">Welcome, {user.name}</h1></main> : page === 'register' ? <Register /> : <Login onLogin={setUser} />}
+    <Routes>
+      <Route path="/register" element={user ? <Navigate to="/dashboard" replace /> : <Register />} />
+      <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <Login onLogin={loggedIn} />} />
+      <Route path="/dashboard" element={user ? <main className="container py-5"><h1 className="h3">Welcome, {user.name}</h1><p>{user.email}</p></main> : <Navigate to="/login" replace />} />
+      <Route path="*" element={<Navigate to={user ? '/dashboard' : '/login'} replace />} />
+    </Routes>
   </>
 }
+export default function App() { return <BrowserRouter><AccountApp /></BrowserRouter> }

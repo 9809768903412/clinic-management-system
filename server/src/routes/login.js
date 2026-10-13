@@ -17,7 +17,7 @@ function createLoginRouter(users = User) {
     try {
       const user = await users.findOne({ email: email.trim().toLowerCase() }).select('+passwordHash');
       if (!user || !(await verifyPassword(password, user.passwordHash))) return res.status(401).json({ message: 'Invalid email or password.' });
-      const token = jwt.sign({}, process.env.JWT_SECRET, { subject: String(user._id), expiresIn: '1h', algorithm: 'HS256' });
+      const token = jwt.sign({ version: user.authVersion || 0 }, process.env.JWT_SECRET, { subject: String(user._id), expiresIn: '1h', algorithm: 'HS256' });
       res.cookie('access_token', token, { ...cookieOptions, maxAge: 60 * 60 * 1000 });
       return res.json({ user: { id: user._id, name: user.name, email: user.email } });
     } catch (error) { return next(error); }

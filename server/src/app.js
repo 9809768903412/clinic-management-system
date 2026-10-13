@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const createRegisterRouter = require('./routes/register');
+const createSessionRouter = require('./routes/session');
 const { createLoginRouter } = require('./routes/login');
 
 const app = express();
@@ -24,6 +25,7 @@ app.use('/api/auth', (req, res, next) => {
 });
 app.use('/api/auth', createRegisterRouter());
 app.use('/api/auth', createLoginRouter());
+app.use('/api/auth', createSessionRouter());
 
 app.use((_req, res) => res.status(404).json({ message: 'Route not found.' }));
 app.use((error, _req, res, _next) => {
