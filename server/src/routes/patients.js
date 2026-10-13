@@ -31,11 +31,18 @@ function createPatientRouter(patients = Patient, auth = requireAuth()) {
   });
   router.patch('/:id/archive', roles('admin', 'receptionist'), async (req, res, next) => {
     if (!mongoose.isObjectIdOrHexString(req.params.id) || typeof req.body?.archived !== 'boolean') return res.status(400).json({ message: 'Invalid patient or archive value.' });
+    let session;
     try {
-      if (req.body.archived && await Appointment.exists({ patient: req.params.id, status: { $in: ['Scheduled', 'Checked in'] } })) return res.status(409).json({ message: 'Complete or cancel active visits before archiving this patient.' });
-      const patient = await patients.findOneAndUpdate({ _id: req.params.id }, { $set: { archived: req.body.archived } }, { returnDocument: 'after' });
-      if (!patient) return res.status(404).json({ message: 'Patient not found.' }); return res.json({ patient });
-    } catch (error) { return next(error); }
+      session = await mongoose.startSession();
+      let patient;
+      await session.withTransaction(async () => {
+        patient = await patients.findOneAndUpdate({ _id: req.params.id }, { $set: { archived: req.body.archived } }, { session, returnDocument: 'after' });
+        if (!patient) { const error = new Error('Patient not found.'); error.status = 404; throw error; }
+        if (req.body.archived && await Appointment.exists({ patient: req.params.id, status: { $in: ['Scheduled', 'Checked in'] } }).session(session)) { const error = new Error('Complete or cancel active visits before archiving this patient.'); error.status = 409; throw error; }
+      });
+      return res.json({ patient });
+    } catch (error) { if ([404, 409].includes(error.status)) return res.status(error.status).json({ message: error.message }); return next(error); }
+    finally { if (session) await session.endSession(); }
   });
   router.delete('/:id', roles('admin', 'receptionist'), async (req, res, next) => {
     if (!mongoose.isObjectIdOrHexString(req.params.id)) return res.status(400).json({ message: 'Invalid patient ID.' });

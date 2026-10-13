@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import axios from 'axios'
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import 'bootstrap/dist/css/bootstrap.min.css'
 import './App.css'
+import { notifySessionChange } from './lib/session'
 import Profile from './pages/Profile'
 import Navigation from './components/Navigation'
 import Dashboard from './pages/Dashboard'
@@ -22,15 +23,46 @@ function AccountApp() {
   const [loggingOut, setLoggingOut] = useState(false)
   const [logoutError, setLogoutError] = useState('')
   const navigate = useNavigate()
+  const currentUser = useRef(null)
+  const sessionRevision = useRef(0)
+  useEffect(() => { currentUser.current = user }, [user])
 
   useEffect(() => {
-    const controller = new AbortController()
-    axios.get(`${apiUrl}/auth/me`, { withCredentials: true, timeout: 10000, signal: controller.signal })
-      .then(({ data }) => { setUser(data.user); setError('') })
-      .catch(e => { if (!axios.isCancel(e)) { setUser(null); setError(e.response?.status === 401 ? '' : 'Cannot check your session. Check the backend connection and try again.') } })
-      .finally(() => { if (!controller.signal.aborted) setChecking(false) })
-    return () => controller.abort()
-  }, [attempt])
+    let pending
+    function refreshSession() {
+      pending?.abort()
+      const controller = new AbortController()
+      const revision = sessionRevision.current
+      pending = controller
+      function updateAccount(account) {
+        const previous = currentUser.current
+        const changed = previous && (previous.id !== account?.id || previous.role !== account?.role)
+        currentUser.current = account
+        setUser(account)
+        if (changed) navigate(account ? '/dashboard' : '/login', { replace: true })
+      }
+      axios.get(`${apiUrl}/auth/me`, { withCredentials: true, timeout: 10000, signal: controller.signal })
+        .then(({ data }) => { if (revision !== sessionRevision.current) return; updateAccount(data.user); setError('') })
+        .catch(e => {
+          if (axios.isCancel(e) || revision !== sessionRevision.current) return
+          updateAccount(null)
+          setError(e.response?.status === 401 ? '' : 'Cannot check your session. Check the backend connection and try again.')
+        })
+        .finally(() => { if (!controller.signal.aborted) setChecking(false) })
+    }
+    function storageChanged(event) { if (event.key === 'clinic-session-change') refreshSession() }
+    function visibilityChanged() { if (document.visibilityState === 'visible') refreshSession() }
+    refreshSession()
+    window.addEventListener('focus', refreshSession)
+    window.addEventListener('storage', storageChanged)
+    document.addEventListener('visibilitychange', visibilityChanged)
+    return () => {
+      pending?.abort()
+      window.removeEventListener('focus', refreshSession)
+      window.removeEventListener('storage', storageChanged)
+      document.removeEventListener('visibilitychange', visibilityChanged)
+    }
+  }, [attempt, navigate])
 
   async function logout() {
     if (loggingOut) return
@@ -38,22 +70,25 @@ function AccountApp() {
     setLogoutError('')
     try {
       await axios.post(`${apiUrl}/auth/logout`, {}, { withCredentials: true, timeout: 10000 })
+      sessionRevision.current += 1
+      currentUser.current = null
       setUser(null)
+      notifySessionChange()
       navigate('/login', { replace: true })
     } catch (e) {
-      if (e.response?.status === 401) { setUser(null); navigate('/login', { replace: true }) }
+      if (e.response?.status === 401) { sessionRevision.current += 1; currentUser.current = null; setUser(null); notifySessionChange(); navigate('/login', { replace: true }) }
       else setLogoutError('Logout failed. Please try again.')
     } finally { setLoggingOut(false) }
   }
 
-  function loggedIn(account) { setUser(account); navigate('/dashboard', { replace: true }) }
+  function loggedIn(account) { sessionRevision.current += 1; currentUser.current = account; setUser(account); notifySessionChange(); navigate('/dashboard', { replace: true }) }
   if (checking) return <main className="container py-5" role="status">Checking your session…</main>
   if (error) return <main className="container py-5"><p role="alert">{error}</p><button className="btn btn-primary" onClick={() => { setChecking(true); setAttempt(value => value + 1) }}>Retry</button></main>
 
   return <>
     <Navigation user={user} onLogout={logout} loggingOut={loggingOut} />
     {logoutError && <p className="container mt-3 text-danger" role="alert">{logoutError}</p>}
-    <Routes>
+    <Routes key={`${user?.id || 'signed-out'}-${user?.role || 'none'}`}>
       <Route path="/staff" element={user?.role === 'admin' ? <Staff /> : <Navigate to={user ? '/dashboard' : '/login'} replace />} />
       <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <Login onLogin={loggedIn} />} />
       <Route path="/profile" element={user ? <Profile user={user} onUpdate={setUser} /> : <Navigate to="/login" replace />} />

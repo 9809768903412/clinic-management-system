@@ -12,6 +12,12 @@ function validSlot(value) {
   const date = new Date(value);
   return typeof value === 'string' && !Number.isNaN(date.getTime()) && date.getUTCMinutes() % 30 === 0 && date.getUTCSeconds() === 0 && date.getUTCMilliseconds() === 0;
 }
+function validVisitTime(value, type, now = Date.now()) {
+  if (!validSlot(value)) return false;
+  const time = new Date(value).getTime();
+  if (type === 'Appointment') return time > now;
+  return type === 'Walk-in' && time >= Math.floor(now / 1800000) * 1800000 && time <= Math.ceil(now / 1800000) * 1800000;
+}
 const details = query => query.populate('patient', 'name patientId birthDate contact archived').populate('doctor', 'name').populate('edits.by', 'name').populate('edits.previousDoctor', 'name').populate('edits.doctor', 'name');
 function createAppointmentRouter() {
   const router = express.Router(); router.use(requireAuth(), roles('admin', 'receptionist', 'doctor'));
@@ -29,7 +35,7 @@ function createAppointmentRouter() {
   router.post('/', roles('admin', 'receptionist'), async (req, res, next) => {
     const { patient, doctor, scheduledAt, visitType, reason = '' } = req.body || {};
     if (!mongoose.isObjectIdOrHexString(patient) || !mongoose.isObjectIdOrHexString(doctor) || !['Appointment', 'Walk-in'].includes(visitType) || typeof reason !== 'string' || reason.length > 200) return res.status(400).json({ message: 'Choose a patient, doctor, visit type, and reason under 200 characters.' });
-    if (!validSlot(scheduledAt) || new Date(scheduledAt) < new Date(Date.now() - (visitType === 'Walk-in' ? 30 * 60 * 1000 : 0))) return res.status(400).json({ message: 'Choose a future 30-minute slot (00 or 30 minutes). Walk-ins may use the current slot.' });
+    if (!validVisitTime(scheduledAt, visitType)) return res.status(400).json({ message: 'Appointments need a future 30-minute slot. Walk-ins must use the current or next slot.' });
     let session;
     try {
       if (!await Patient.exists({ _id: patient, archived: false })) return res.status(400).json({ message: 'Choose an active patient.' });
@@ -41,11 +47,13 @@ function createAppointmentRouter() {
         // Touch the patient to serialize booking against patient deletion.
         const record = await Patient.findOneAndUpdate({ _id: patient, archived: false }, { $inc: { __v: 1 } }, { session, returnDocument: 'after' });
         if (!record) { const error = new Error('Choose an active patient.'); error.status = 409; throw error; }
+        const assignedDoctor = await User.findOneAndUpdate({ _id: doctor, role: 'doctor', active: true }, { $inc: { __v: 1 } }, { session, returnDocument: 'after' });
+        if (!assignedDoctor) { const error = new Error('Choose an active doctor.'); error.status = 409; throw error; }
         [appointment] = await Appointment.create([{ patient, doctor, scheduledAt, visitType, reason: reason.trim(), status, createdBy: req.user._id, history: [{ status, by: req.user._id }] }], { session });
       });
       return res.status(201).json({ appointment: await details(Appointment.findById(appointment._id)) });
     } catch (error) {
-      if (error.code === 11000) return res.status(409).json({ message: 'This doctor already has a visit in that slot. Choose another slot or doctor.' });
+      if (error.code === 11000) return res.status(409).json({ message: error.keyPattern?.patient ? 'This patient already has a visit in that slot.' : 'This doctor already has a visit in that slot. Choose another slot or doctor.' });
       if (error.status === 409) return res.status(409).json({ message: error.message });
       return next(error);
     } finally { if (session) await session.endSession(); }
@@ -53,6 +61,7 @@ function createAppointmentRouter() {
   router.put('/:id', roles('admin', 'receptionist'), async (req, res, next) => {
     const { doctor, scheduledAt, reason, expectedUpdatedAt } = req.body || {};
     if (!mongoose.isObjectIdOrHexString(req.params.id) || !mongoose.isObjectIdOrHexString(doctor) || typeof reason !== 'string' || reason.length > 200 || !validSlot(scheduledAt) || typeof expectedUpdatedAt !== 'string' || Number.isNaN(Date.parse(expectedUpdatedAt))) return res.status(400).json({ message: 'Choose a doctor, a 30-minute slot, and a reason under 200 characters. Refresh if the visit is stale.' });
+    let session;
     try {
       const current = await Appointment.findById(req.params.id);
       if (!current) return res.status(404).json({ message: 'Appointment not found.' });
@@ -63,10 +72,20 @@ function createAppointmentRouter() {
       if (!await User.exists({ _id: doctor, role: 'doctor', active: true })) return res.status(400).json({ message: 'Choose an active doctor.' });
       const update = { doctor, scheduledAt: new Date(scheduledAt), reason: reason.trim() };
       if (String(current.doctor) === doctor && current.scheduledAt.getTime() === update.scheduledAt.getTime() && current.reason === update.reason) return res.json({ appointment: await details(Appointment.findById(current._id)) });
-      const appointment = await details(Appointment.findOneAndUpdate({ _id: current._id, status: current.status, updatedAt: current.updatedAt }, { $set: update, $push: { edits: { at: new Date(), by: req.user._id, previousDoctor: current.doctor, doctor, previousScheduledAt: current.scheduledAt, scheduledAt: update.scheduledAt, previousReason: current.reason, reason: update.reason } } }, { returnDocument: 'after', runValidators: true }));
-      if (!appointment) return res.status(409).json({ message: 'This visit changed while you were editing. Refresh and try again.' });
+      session = await mongoose.startSession();
+      let appointment;
+      await session.withTransaction(async () => {
+        const assignedDoctor = await User.findOneAndUpdate({ _id: doctor, role: 'doctor', active: true }, { $inc: { __v: 1 } }, { session, returnDocument: 'after' });
+        if (!assignedDoctor) { const error = new Error('Choose an active doctor.'); error.status = 409; throw error; }
+        appointment = await details(Appointment.findOneAndUpdate({ _id: current._id, status: current.status, updatedAt: current.updatedAt }, { $set: update, $push: { edits: { at: new Date(), by: req.user._id, previousDoctor: current.doctor, doctor, previousScheduledAt: current.scheduledAt, scheduledAt: update.scheduledAt, previousReason: current.reason, reason: update.reason } } }, { session, returnDocument: 'after', runValidators: true }));
+        if (!appointment) { const error = new Error('This visit changed while you were editing. Refresh and try again.'); error.status = 409; throw error; }
+      });
       return res.json({ appointment });
-    } catch (error) { if (error.code === 11000) return res.status(409).json({ message: 'The selected doctor already has a visit in that slot.' }); return next(error); }
+    } catch (error) {
+      if (error.code === 11000) return res.status(409).json({ message: error.keyPattern?.patient ? 'This patient already has a visit in that slot.' : 'The selected doctor already has a visit in that slot.' });
+      if (error.status === 409) return res.status(409).json({ message: error.message });
+      return next(error);
+    } finally { if (session) await session.endSession(); }
   });
   router.patch('/:id/status', roles('admin', 'receptionist'), async (req, res, next) => {
     const status = req.body?.status;
@@ -76,11 +95,11 @@ function createAppointmentRouter() {
       if (!(transitions[current.status] || []).includes(status)) return res.status(409).json({ message: 'This visit cannot move to that status.' });
       if (status === 'Checked in' && current.scheduledAt > new Date()) return res.status(409).json({ message: 'This appointment is not due for check-in yet.' });
       if (status === 'No-show' && current.scheduledAt > new Date()) return res.status(409).json({ message: 'Mark a no-show only after the appointment time.' });
-      const appointment = await details(Appointment.findOneAndUpdate({ _id: current._id, status: current.status }, { $set: { status }, $push: { history: { status, at: new Date(), by: req.user._id } } }, { returnDocument: 'after' }));
+      const appointment = await details(Appointment.findOneAndUpdate({ _id: current._id, status: current.status, updatedAt: current.updatedAt }, { $set: { status }, $push: { history: { status, at: new Date(), by: req.user._id } } }, { returnDocument: 'after' }));
       if (!appointment) return res.status(409).json({ message: 'This visit was updated by another staff member. Refresh and try again.' });
       return res.json({ appointment });
     } catch (error) { return next(error); }
   });
   return router;
 }
-module.exports = { createAppointmentRouter, validSlot, transitions };
+module.exports = { createAppointmentRouter, validSlot, validVisitTime, transitions };
