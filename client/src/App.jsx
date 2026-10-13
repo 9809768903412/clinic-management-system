@@ -3,6 +3,7 @@ import axios from 'axios'
 import { BrowserRouter, Routes, Route, Navigate, Link, useNavigate } from 'react-router-dom'
 import 'bootstrap/dist/css/bootstrap.min.css'
 import './App.css'
+import Students from './pages/Students'
 import Register from './pages/Register'
 import Login from './pages/Login'
 
@@ -46,12 +47,13 @@ function AccountApp() {
 
   return <>
     <nav className="container pt-4 d-flex gap-3" aria-label="Account navigation">
-      {user ? <><Link to="/dashboard">Dashboard</Link><button className="btn btn-outline-secondary btn-sm" disabled={loggingOut} onClick={logout}>{loggingOut ? 'Logging out…' : 'Logout'}</button></> : <><Link to="/login">Login</Link><Link to="/register">Register</Link></>}
+      {user ? <><Link to="/dashboard">Dashboard</Link><Link to="/students">Students</Link><button className="btn btn-outline-secondary btn-sm" disabled={loggingOut} onClick={logout}>{loggingOut ? 'Logging out…' : 'Logout'}</button></> : <><Link to="/login">Login</Link><Link to="/register">Register</Link></>}
     </nav>
     {logoutError && <p className="container mt-3 text-danger" role="alert">{logoutError}</p>}
     <Routes>
       <Route path="/register" element={user ? <Navigate to="/dashboard" replace /> : <Register />} />
       <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <Login onLogin={loggedIn} />} />
+      <Route path="/students" element={user ? <Students /> : <Navigate to="/login" replace />} />
       <Route path="/dashboard" element={user ? <main className="container py-5"><h1 className="h3">Welcome, {user.name}</h1><p>{user.email}</p></main> : <Navigate to="/login" replace />} />
       <Route path="*" element={<Navigate to={user ? '/dashboard' : '/login'} replace />} />
     </Routes>

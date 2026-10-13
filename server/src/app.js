@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
+const createStudentRouter = require('./routes/students');
 const createRegisterRouter = require('./routes/register');
 const createSessionRouter = require('./routes/session');
 const { createLoginRouter } = require('./routes/login');
@@ -18,7 +19,7 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
-app.use('/api/auth', (req, res, next) => {
+app.use('/api', (req, res, next) => {
   const origin = req.get('Origin');
   if (req.method !== 'GET' && origin && origin !== (process.env.CLIENT_ORIGIN || 'http://localhost:5173')) return res.status(403).json({ message: 'Request origin is not allowed.' });
   next();
@@ -26,6 +27,7 @@ app.use('/api/auth', (req, res, next) => {
 app.use('/api/auth', createRegisterRouter());
 app.use('/api/auth', createLoginRouter());
 app.use('/api/auth', createSessionRouter());
+app.use('/api/students', createStudentRouter());
 
 app.use((_req, res) => res.status(404).json({ message: 'Route not found.' }));
 app.use((error, _req, res, _next) => {
