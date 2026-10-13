@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
-    "check": "node --check src/app.js && node --check src/server.js && node --check src/config/database.js && node --check src/models/Student.js",
+    "check": "node --check src/app.js && node --check src/server.js && node --check src/config/database.js && node --check src/models/Student.js && node --check src/models/User.js && node --check src/routes/register.js && node --check src/utils/password.js",
     "test": "node --test"
   },
   "engines": {
