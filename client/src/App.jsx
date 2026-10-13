@@ -13,6 +13,8 @@ function AccountApp() {
   const [checking, setChecking] = useState(true)
   const [error, setError] = useState('')
   const [attempt, setAttempt] = useState(0)
+  const [loggingOut, setLoggingOut] = useState(false)
+  const [logoutError, setLogoutError] = useState('')
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -24,14 +26,29 @@ function AccountApp() {
     return () => controller.abort()
   }, [attempt])
 
+  async function logout() {
+    if (loggingOut) return
+    setLoggingOut(true)
+    setLogoutError('')
+    try {
+      await axios.post(`${apiUrl}/auth/logout`, {}, { withCredentials: true, timeout: 10000 })
+      setUser(null)
+      navigate('/login', { replace: true })
+    } catch (e) {
+      if (e.response?.status === 401) { setUser(null); navigate('/login', { replace: true }) }
+      else setLogoutError('Logout failed. Please try again.')
+    } finally { setLoggingOut(false) }
+  }
+
   function loggedIn(account) { setUser(account); navigate('/dashboard', { replace: true }) }
   if (checking) return <main className="container py-5" role="status">Checking your session…</main>
   if (error) return <main className="container py-5"><p role="alert">{error}</p><button className="btn btn-primary" onClick={() => { setChecking(true); setAttempt(value => value + 1) }}>Retry</button></main>
 
   return <>
     <nav className="container pt-4 d-flex gap-3" aria-label="Account navigation">
-      {user ? <Link to="/dashboard">Dashboard</Link> : <><Link to="/login">Login</Link><Link to="/register">Register</Link></>}
+      {user ? <><Link to="/dashboard">Dashboard</Link><button className="btn btn-outline-secondary btn-sm" disabled={loggingOut} onClick={logout}>{loggingOut ? 'Logging out…' : 'Logout'}</button></> : <><Link to="/login">Login</Link><Link to="/register">Register</Link></>}
     </nav>
+    {logoutError && <p className="container mt-3 text-danger" role="alert">{logoutError}</p>}
     <Routes>
       <Route path="/register" element={user ? <Navigate to="/dashboard" replace /> : <Register />} />
       <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <Login onLogin={loggedIn} />} />
